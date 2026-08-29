@@ -13,6 +13,14 @@ EnvironmentFile=__APP_DIR__/.env
 Environment=NODE_ENV=production
 # 浏览器内核的共享位置（服务用户读不到 root 的 ~/.cache）
 Environment=PLAYWRIGHT_BROWSERS_PATH=__BROWSERS_PATH__
+
+# 每次启动前确保 .data 存在。
+# 没有这一步，ReadWritePaths 指向不存在的目录会让服务在 NAMESPACE 阶段就失败
+# （status=226/NAMESPACE），进程根本起不来。
+# 前缀 + 表示以 root 执行，避免服务用户无权在 APP_DIR 下建目录。
+ExecStartPre=+/bin/mkdir -p __APP_DIR__/.data
+ExecStartPre=+/bin/chown __USER__:__USER__ __APP_DIR__/.data
+
 ExecStart=__NODE__ server/index.js
 
 # 崩溃自动拉起

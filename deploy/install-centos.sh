@@ -110,7 +110,21 @@ if [ ! -f "${APP_DIR}/package.json" ]; then
 else
   log "使用已存在的项目目录 ${APP_DIR}"
 fi
+
+# 代码位置与安装目标不一致时明确提示，避免装出两份代码
+if [ "${SCRIPT_DIR}" != "${APP_DIR}" ] && [ "${APP_DIR}" = "/opt/${APP_NAME}" ]; then
+  warn "代码在 ${SCRIPT_DIR}，但默认会安装到 ${APP_DIR}"
+  warn "若想直接就地安装，请改用：APP_DIR=${SCRIPT_DIR} bash $0"
+fi
+
 cd "${APP_DIR}"
+
+# 运行时数据目录必须预先创建。
+# 原因：service 里配了 ProtectSystem=strict + ReadWritePaths=<APP_DIR>/.data，
+# 而 .data 本来是 Node 首次运行时才建的 —— systemd 在启动进程之前就要建立
+# mount namespace，目录不存在会直接失败：status=226/NAMESPACE
+mkdir -p "${APP_DIR}/.data"
+log "已创建运行时数据目录: ${APP_DIR}/.data"
 
 # ---------- 6. npm 依赖 ----------
 log "安装 npm 依赖 …"
