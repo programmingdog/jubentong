@@ -31,10 +31,17 @@ StartLimitIntervalSec=60
 StartLimitBurst=5
 
 # 安全加固
-NoNewPrivileges=true
+# 注意：Chromium 的 crashpad 崩溃上报子进程在 NoNewPrivileges 限制下无法初始化，
+# 会导致浏览器一启动就 SIGTRAP 退出。故这里不启用 NoNewPrivileges。
+# NoNewPrivileges=true
 PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=read-only
+# 用 full 而非 strict：strict 把根文件系统设为只读并限制 /proc，
+# 会让 Chromium 启动阶段的辅助进程写库失败
+ProtectSystem=full
+ProtectHome=false
+# Chromium 需要可写的 HOME 来放配置/缓存/崩溃库，否则 crashpad 初始化失败。
+# 指向 .data（已在 ReadWritePaths 里，且服务用户有写权限）
+Environment=HOME=__APP_DIR__/.data
 ReadWritePaths=__APP_DIR__/.data
 
 # 资源限制：浏览器较吃内存，可根据机器配置调整
