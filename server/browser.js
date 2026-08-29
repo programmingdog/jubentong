@@ -180,6 +180,8 @@ async function collect({ url, want, timeout = 30000, waitFor = [], mode = 'pc' }
           viewport: { width: 1440, height: 900 },
           locale: 'zh-CN',
           timezoneId: 'Asia/Shanghai',
+          // 真实浏览器会带的 Accept-Language，缺了容易被风控识别为脚本
+          acceptLanguage: 'zh-CN,zh;q=0.9,en;q=0.8',
           javaScriptEnabled: true,
         }
       : {

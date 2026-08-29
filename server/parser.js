@@ -32,7 +32,7 @@ async function fetchDetail(awemeId, opts = {}) {
   const timeout = opts.timeout || 45000;
   const pageUrl = `https://www.douyin.com/video/${awemeId}`;
 
-  const { payloads } = await collect({
+  const { payloads, status, finalUrl } = await collect({
     url: pageUrl,
     want: isDetailRequest,
     timeout,
@@ -51,7 +51,14 @@ async function fetchDetail(awemeId, opts = {}) {
   }
 
   if (!detail) {
-    // 接口没返回视频数据，通常是作品不存在/私密/已删除，或命中风控
+    // 接口没返回视频数据，通常是作品不存在/私密/已删除，或命中风控。
+    // 记录诊断信息（落地页、各响应状态），便于从生产日志区分「接口变更」还是「被风控」。
+    const peek = payloads.slice(0, 6).map((p) => `${p.status} ${p.url.slice(0, 70)}`);
+    // eslint-disable-next-line no-console
+    console.error(
+      '[parser] 未捕获到视频详情 awemeId=%s gotoStatus=%s finalUrl=%s payloads=%d 候选=%j',
+      awemeId, status, finalUrl, payloads.length, peek
+    );
     throw new ApiError(
       'NOT_FOUND',
       '未能获取到视频数据。可能是作品已删除、设为私密、需要登录，或触发了风控（可稍后重试）'
