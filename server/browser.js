@@ -220,10 +220,12 @@ async function collect({ url, want, timeout = 30000, waitFor = [], mode = 'pc' }
       if (!want(u)) return;
       try {
         const ct = (res.headers()['content-type'] || '').toLowerCase();
-        if (ct.includes('json')) {
-          const json = await res.json();
-          if (json) payloads.push({ url: u, status: res.status(), json });
-        }
+        // 关键：抖音的 detail 接口在某些情况下以 text/plain 返回（内容实为 JSON），
+        // 若只认 application/json 会把真数据漏掉 -> NOT_FOUND。
+        // 因此对目标请求，只要类型是 json 或 text 都尝试按 JSON 解析。
+        if (!ct.includes('json') && !ct.includes('text')) return;
+        const json = await res.json().catch(() => null);
+        if (json) payloads.push({ url: u, status: res.status(), json });
       } catch (_) {
         // 响应体已被消费或不是 JSON，忽略
       }
