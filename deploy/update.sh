@@ -64,7 +64,7 @@ if [ -z "${PLAYWRIGHT_BROWSERS_PATH:-}" ] && [ -f "${APP_DIR}/.env" ]; then
 fi
 
 # ---------- 重启 ----------
-if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files | grep -q "^${SERVICE}.service"; then
+if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files "${SERVICE}.service" | grep -q "^${SERVICE}\.service"; then
   log "重启服务 ${SERVICE} …"
   systemctl restart "${SERVICE}" || fail "重启失败"
   sleep 3
