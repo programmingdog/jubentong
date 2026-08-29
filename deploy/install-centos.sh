@@ -181,6 +181,13 @@ if command -v systemctl >/dev/null 2>&1; then
   id -u "${APP_NAME}" >/dev/null 2>&1 || useradd -r -s /sbin/nologin "${APP_NAME}" || true
   chown -R "${APP_NAME}:${APP_NAME}" "${APP_DIR}" || true
 
+  # 关键：目录属主已改成 APP_NAME，而自动部署通常以 SERVER_USER（多为 root）
+  # 身份执行 git pull。属主与执行者不一致时 git 会直接拒绝：
+  #   fatal: detected dubious ownership in repository
+  # 用 --system 配置对全部用户生效，避免后续自动部署在此处失败。
+  git config --system --add safe.directory "${APP_DIR}" 2>/dev/null || true
+  log "已放行 git 目录所有权检查: ${APP_DIR}"
+
   sed -e "s|__APP_DIR__|${APP_DIR}|g" \
       -e "s|__USER__|${APP_NAME}|g" \
       -e "s|__NODE__|$(command -v node)|g" \
