@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>抖音分享链接解析服务 · 接口文档</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23fe2c55'/%3E%3Ctext x='16' y='22' font-size='15' font-weight='bold' fill='white' text-anchor='middle' font-family='Arial'%3EDY%3C/text%3E%3C/svg%3E" />
+<link rel="stylesheet" href="./docs.css" />
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hd">
+    <div class="logo">DY</div>
+    <div>
+      <h1>抖音分享链接解析服务</h1>
+      <p>传入抖音分享链接，返回视频的真实下载地址</p>
+    </div>
+    <span id="auth-badge" class="badge badge-idle">检测中…</span>
+  </header>
+
+  <!-- 在线调试 -->
+  <section class="card">
+    <h2>在线调试</h2>
+    <div class="field">
+      <label>抖音分享链接 / 口令文本</label>
+      <textarea id="in-url" placeholder="https://v.douyin.com/JFz0TRU-LE0/&#10;也支持整段口令文本或完整链接"></textarea>
+    </div>
+    <div class="field">
+      <label>API Key <span class="muted" id="auth-tip"></span></label>
+      <input id="in-key" type="text" placeholder="X-API-Key" autocomplete="off" />
+    </div>
+    <div class="row">
+      <button id="btn-run" class="btn primary">调用解析接口</button>
+      <button id="btn-fill" class="btn ghost">填入示例链接</button>
+      <span id="status" class="muted"></span>
+    </div>
+    <div id="out" class="out hidden"></div>
+  </section>
+
+  <!-- 接口说明 -->
+  <section class="card">
+    <h2>接口</h2>
+
+    <div class="api">
+      <div class="api-hd"><span class="method post">POST</span><code>/v1/parse</code></div>
+      <p>解析分享链接，返回下载地址。同时也支持 <span class="method get">GET</span> <code>/v1/parse?url=...</code></p>
+
+      <div class="sub">请求头</div>
+      <pre>Content-Type: application/json
+X-API-Key: &lt;你的 API Key&gt;</pre>
+
+      <div class="sub">请求体</div>
+      <pre>{
+  "url": "https://v.douyin.com/JFz0TRU-LE0/"
+}</pre>
+
+      <div class="sub">响应</div>
+      <pre>{
+  "ok": true,
+  "cached": false,
+  "elapsed_ms": 4210,
+  "data": {
+    "type": "video",
+    "aweme_id": "7614864032293885375",
+    "title": "视频标题",
+    "author": { "nickname": "作者", "sec_uid": "MS4wLjABAAAA..." },
+    "duration": 116,
+    "cover": "https://...",
+
+    "download_url": "http://host/dl?url=...&exp=...&sig=...",
+    "direct_url":   "https://v26-web.douyinvod.com/...",
+    "play_url":     "http://host/dl?...&inline=1",
+
+    "filename": "作者 - 标题.mp4",
+    "width": 1080, "height": 1920, "size": 31148021,
+    "expires_at": "2026-08-29T12:00:00.000Z",
+
+    "alternatives": [ { "label": "720P", "download_url": "...", "direct_url": "..." } ],
+    "images":       [ { "label": "图 1", "download_url": "...", "direct_url": "..." } ]
+  }
+}</pre>
+    </div>
+
+    <div class="api">
+      <div class="api-hd"><span class="method get">GET</span><code>/dl</code></div>
+      <p>下载代理。<code>download_url</code> 已带签名，直接请求即可，无需再带 API Key。
+         支持 Range 请求，可用于边下边播。</p>
+      <div class="sub">参数（由解析接口生成，调用方无需手动构造）</div>
+      <pre>url   抖音原始地址
+name  下载文件名
+exp   过期时间戳（秒）
+sig   HMAC-SHA256 签名
+inline=1  在线播放（不加 Content-Disposition）</pre>
+    </div>
+
+    <div class="api">
+      <div class="api-hd"><span class="method get">GET</span><code>/healthz</code></div>
+      <p>健康检查，不需要鉴权。</p>
+    </div>
+  </section>
+
+  <!-- 字段说明 -->
+  <section class="card">
+    <h2>返回字段</h2>
+    <table class="tbl">
+      <thead><tr><th>字段</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>download_url</code></td><td><b>推荐</b>。走本服务转发，绕过抖音 Referer 防盗链，拿到即可下载</td></tr>
+        <tr><td><code>direct_url</code></td><td>抖音原始 CDN 直链。可直接使用，但可能受防盗链影响，且有有效期</td></tr>
+        <tr><td><code>play_url</code></td><td>在线播放地址，支持拖动进度条</td></tr>
+        <tr><td><code>alternatives</code></td><td>其他清晰度候选，结构与主地址一致</td></tr>
+        <tr><td><code>images</code></td><td>图集作品的每张原图（<code>type</code> 为 <code>images</code> 时有值）</td></tr>
+        <tr><td><code>expires_at</code></td><td><code>download_url</code> 的过期时间，过期后需重新调用解析</td></tr>
+        <tr><td><code>cached</code></td><td>本次结果是否来自缓存</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 错误码 -->
+  <section class="card">
+    <h2>错误码</h2>
+    <table class="tbl">
+      <thead><tr><th>HTTP</th><th>code</th><th>含义</th></tr></thead>
+      <tbody>
+        <tr><td>400</td><td><code>LINK_NOT_FOUND</code></td><td>文本中没有找到抖音链接</td></tr>
+        <tr><td>400</td><td><code>UNSUPPORTED_LINK</code></td><td>链接类型不支持（直播间、主页等）</td></tr>
+        <tr><td>401</td><td><code>UNAUTHORIZED</code></td><td>缺少或无效的 API Key</td></tr>
+        <tr><td>404</td><td><code>NOT_FOUND</code></td><td>作品已删除、私密或命中风控</td></tr>
+        <tr><td>410</td><td><code>LINK_EXPIRED</code></td><td>下载链接已过期，重新解析即可</td></tr>
+        <tr><td>502</td><td><code>UPSTREAM_ERROR</code></td><td>抖音上游返回异常</td></tr>
+        <tr><td>503</td><td><code>QUEUE_TIMEOUT</code></td><td>并发已满，排队超时</td></tr>
+        <tr><td>504</td><td><code>TIMEOUT</code></td><td>解析超时</td></tr>
+      </tbody>
+    </table>
+    <p class="muted">所有错误响应统一为：<code>{"ok":false,"code":"...","message":"..."}</code></p>
+  </section>
+
+  <!-- 调用示例 -->
+  <section class="card">
+    <h2>调用示例</h2>
+    <div class="sub">cURL</div>
+    <pre>curl -X POST http://localhost:5173/v1/parse \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key" \
+  -d '{"url":"https://v.douyin.com/JFz0TRU-LE0/"}'</pre>
+
+    <div class="sub">JavaScript</div>
+    <pre>const res = await fetch('http://localhost:5173/v1/parse', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'X-API-Key': KEY },
+  body: JSON.stringify({ url: shareText }),
+});
+const { data } = await res.json();
+console.log(data.download_url);</pre>
+
+    <div class="sub">Python</div>
+    <pre>import requests
+r = requests.post('http://localhost:5173/v1/parse',
+                  headers={'X-API-Key': KEY},
+                  json={'url': share_text})
+print(r.json()['data']['download_url'])</pre>
+  </section>
+
+  <footer class="ft">
+    解析结果依赖抖音公开页面数据，仅供学习交流，请尊重作者版权。
+  </footer>
+</div>
+
+<script src="./docs.js"></script>
+</body>
+</html>

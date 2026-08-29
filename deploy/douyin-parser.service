@@ -1,0 +1,42 @@
+[Unit]
+Description=Douyin Share Link Parser Service
+Documentation=file:///__APP_DIR__/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+Group=__USER__
+WorkingDirectory=__APP_DIR__
+EnvironmentFile=__APP_DIR__/.env
+Environment=NODE_ENV=production
+# 浏览器内核的共享位置（服务用户读不到 root 的 ~/.cache）
+Environment=PLAYWRIGHT_BROWSERS_PATH=__BROWSERS_PATH__
+ExecStart=__NODE__ server/index.js
+
+# 崩溃自动拉起
+Restart=always
+RestartSec=5
+# 防止短时间反复重启打爆系统
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+# 安全加固
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=__APP_DIR__/.data
+
+# 资源限制：浏览器较吃内存，可根据机器配置调整
+MemoryMax=2G
+TasksMax=512
+
+# 日志
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=douyin-parser
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,83 @@
+name: 部署到生产环境
+
+# 推送到 main 时自动部署；也可在 GitHub 页面手动点「Run workflow」
+on:
+  push:
+    branches: [main]
+    # 只有这些路径变化才部署，改 README 之类不触发
+    paths:
+      - 'server/**'
+      - 'public/**'
+      - 'deploy/**'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+# 同一时间只跑一个部署，后来的排队而不是并发抢服务器
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 准备 Node 环境
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 语法自检
+        run: |
+          for f in server/*.js; do node --check "$f" || exit 1; done
+          node --check public/docs.js
+          echo "语法检查通过"
+
+      - name: 通过 SSH 部署到服务器
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_PORT: ${{ secrets.SERVER_PORT }}
+          APP_DIR: ${{ secrets.APP_DIR }}
+        run: |
+          set -e
+          # 必需的 Secret 检查。未配置时给出明确指引，而不是报一堆莫名错误
+          for pair in "SSH_KEY:SSH_PRIVATE_KEY" "SERVER_HOST:SERVER_HOST" "SERVER_USER:SERVER_USER"; do
+            var="${pair%%:*}"
+            name="${pair##*:}"
+            eval "val=\${$var:-}"
+            if [ -z "$val" ]; then
+              echo "缺少 Secret: $name"
+              echo "请到 Settings → Secrets and variables → Actions → New repository secret 添加"
+              exit 1
+            fi
+          done
+
+          PORT_ARG="${SERVER_PORT:-22}"
+
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          # 把服务器主机指纹加入 known_hosts，避免首次连接交互提示
+          ssh-keyscan -p "$PORT_ARG" -H "$SERVER_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+          DIR="${APP_DIR:-/opt/douyin-parser}"
+
+          ssh -i ~/.ssh/deploy_key \
+              -p "$PORT_ARG" \
+              -o StrictHostKeyChecking=yes \
+              -o BatchMode=yes \
+              -o ConnectTimeout=20 \
+              "$SERVER_USER@$SERVER_HOST" \
+              "cd $DIR && APP_DIR=$DIR bash deploy/update.sh"
+
+      - name: 清理
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
