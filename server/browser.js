@@ -199,6 +199,9 @@ async function collect({ url, want, timeout = 30000, waitFor = [], mode = 'pc' }
   const payloads = [];
   let status = null;
   let finalUrl = url;
+  // 命中目标请求但 body 为空/不可解析的次数。
+  // 抖音风控"静默拒绝"的特征就是 200 + 空 body，这个计数是关键诊断信号。
+  let emptyHits = 0;
 
   try {
     const page = await context.newPage();
@@ -222,25 +225,61 @@ async function collect({ url, want, timeout = 30000, waitFor = [], mode = 'pc' }
         const ct = (res.headers()['content-type'] || '').toLowerCase();
         // 关键：抖音的 detail 接口在某些情况下以 text/plain 返回（内容实为 JSON），
         // 若只认 application/json 会把真数据漏掉 -> NOT_FOUND。
-        // 因此对目标请求，只要类型是 json 或 text 都尝试按 JSON 解析。
         if (!ct.includes('json') && !ct.includes('text')) return;
-        const json = await res.json().catch(() => null);
+        const text = await res.text();
+        if (!text || !text.trim()) {
+          emptyHits += 1; // 风控静默空响应
+          return;
+        }
+        const json = JSON.parse(text);
         if (json) payloads.push({ url: u, status: res.status(), json });
+        else emptyHits += 1;
       } catch (_) {
-        // 响应体已被消费或不是 JSON，忽略
+        emptyHits += 1;
       }
     });
 
-    const resp = await page.goto(url, { timeout, waitUntil: 'domcontentloaded' });
+    // 预热：冷上下文直接进视频页时，detail 接口常返回 200 + 空 body（风控静默拒绝）。
+    // 先访问首页让页面 JS 种下 ttwid / msToken 等 cookie，再进目标页，成功率显著提高。
+    try {
+      await page.goto('https://www.douyin.com/', {
+        timeout: Math.min(timeout, 15000),
+        waitUntil: 'domcontentloaded',
+      });
+      await page.waitForTimeout(2000);
+    } catch (_) {
+      // 首页预热失败不阻断主流程
+    }
+
+    const startAt = Date.now();
+    const remaining = () => timeout - (Date.now() - startAt);
+
+    const resp = await page.goto(url, {
+      timeout: Math.max(remaining(), 5000),
+      waitUntil: 'domcontentloaded',
+    });
     status = resp ? resp.status() : null;
     finalUrl = page.url();
 
     // 等到目标请求出现，或超时
-    const deadline = Date.now() + timeout;
-    while (Date.now() < deadline) {
+    while (remaining() > 0) {
       if (payloads.length) break;
       await page.waitForTimeout(200);
     }
+
+    // 兜底：首屏请求带的是不完整 cookie 被空响应时，刷新一次让带 cookie 的请求重发
+    if (!payloads.length && remaining() > 8000) {
+      try {
+        await page.reload({ timeout: Math.min(remaining(), 20000), waitUntil: 'domcontentloaded' });
+      } catch (_) {
+        /* 忽略 */
+      }
+      while (remaining() > 0) {
+        if (payloads.length) break;
+        await page.waitForTimeout(200);
+      }
+    }
+
     // 再给一点时间让后续补充请求（如 bit_rate 多清晰度）落地
     await page.waitForTimeout(600);
 
@@ -255,7 +294,7 @@ async function collect({ url, want, timeout = 30000, waitFor = [], mode = 'pc' }
     await context.close().catch(() => {});
   }
 
-  return { payloads, status, finalUrl };
+  return { payloads, status, finalUrl, emptyHits };
 }
 
 /**

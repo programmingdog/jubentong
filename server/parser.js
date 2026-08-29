@@ -32,7 +32,7 @@ async function fetchDetail(awemeId, opts = {}) {
   const timeout = opts.timeout || 45000;
   const pageUrl = `https://www.douyin.com/video/${awemeId}`;
 
-  const { payloads, status, finalUrl } = await collect({
+  const { payloads, status, finalUrl, emptyHits } = await collect({
     url: pageUrl,
     want: isDetailRequest,
     timeout,
@@ -41,7 +41,13 @@ async function fetchDetail(awemeId, opts = {}) {
 
   let detail = null;
   let source = null;
+  let filterMsg = null; // 抖音明确的"作品不可见"提示（已删除/仅自己可见等）
   for (const p of payloads) {
+    // aweme_detail 为 null + filter_detail => 抖音明确告知作品无法观看
+    const fd = p.json && p.json.filter_detail;
+    if (fd && !p.json.aweme_detail) {
+      filterMsg = fd.detail_msg || fd.notice || null;
+    }
     const d = findDetail(p.json);
     if (d && (d.aweme_id || d.video || d.image_list)) {
       detail = d;
@@ -51,13 +57,17 @@ async function fetchDetail(awemeId, opts = {}) {
   }
 
   if (!detail) {
+    if (filterMsg) {
+      // 抖音明确说作品没了（删除/私密/审核中），如实转告调用方
+      throw new ApiError('NOT_FOUND', `作品无法观看：${filterMsg}`);
+    }
     // 接口没返回视频数据，通常是作品不存在/私密/已删除，或命中风控。
     // 记录诊断信息（落地页、各响应状态），便于从生产日志区分「接口变更」还是「被风控」。
     const peek = payloads.slice(0, 6).map((p) => `${p.status} ${p.url.slice(0, 70)}`);
     // eslint-disable-next-line no-console
     console.error(
-      '[parser] 未捕获到视频详情 awemeId=%s gotoStatus=%s finalUrl=%s payloads=%d 候选=%j',
-      awemeId, status, finalUrl, payloads.length, peek
+      '[parser] 未捕获到视频详情 awemeId=%s gotoStatus=%s finalUrl=%s payloads=%d 空响应=%d 候选=%j',
+      awemeId, status, finalUrl, payloads.length, emptyHits, peek
     );
     throw new ApiError(
       'NOT_FOUND',

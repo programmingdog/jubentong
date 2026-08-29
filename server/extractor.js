@@ -18,7 +18,9 @@ function findDetail(payload) {
   if (payload.data && payload.data.aweme_detail) return payload.data.aweme_detail;
   if (payload.item_list && payload.item_list.length) return payload.item_list[0];
   for (const v of Object.values(payload)) {
-    if (v && typeof v === 'object' && v.aweme_id) return v;
+    // 注意：filter_detail（作品不可见提示）也带 aweme_id，必须排除，
+    // 否则会被误当成视频本体，产出一份全空的"成功"结果。
+    if (v && typeof v === 'object' && v.aweme_id && !v.filter_reason) return v;
   }
   return null;
 }
