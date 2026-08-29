@@ -71,6 +71,11 @@ const apiKeys = parseKeys(process.env.API_KEYS);
 const config = {
   port: num(process.env.PORT, 5173),
 
+  // 监听地址。默认监听所有网卡，方便直接 IP:端口 访问。
+  // 若前面挂了 Nginx 反代，建议设成 127.0.0.1，只让本机 Nginx 访问，
+  // 公网无法绕过 Nginx 直连 5173
+  host: process.env.HOST || '0.0.0.0',
+
   // 鉴权：配了 API_KEYS 就自动开启，也可用 REQUIRE_AUTH=0 显式关闭
   apiKeys,
   requireAuth: bool(process.env.REQUIRE_AUTH, apiKeys.size > 0),

@@ -128,6 +128,43 @@ CMD ["node", "server/index.js"]
 | 找不到浏览器 | 检查 `PLAYWRIGHT_BROWSERS_PATH` 是否与下载时一致，以及运行用户是否有读权限 |
 | 内存占用高 | 调低 `MAX_CONCURRENCY`，或在 service 里收紧 `MemoryMax` |
 
+### 绑定对外域名（Nginx 反向代理）
+
+不建议把 `5173` 直接暴露到公网。推荐用域名 + Nginx 反代，顺带白拿 HTTPS。
+
+**前置条件**：域名已解析到服务器公网 IP；宝塔里已建站并申请过 Let's Encrypt 证书；
+云厂商安全组已放行 80、443。国内服务器做 80/443 需要域名已备案。
+
+```bash
+# 1. 生成反代配置并重载 Nginx（宝塔会自动找到证书路径）
+bash deploy/setup-nginx.sh api.example.com
+
+# 2. 把对外地址告诉服务，否则返回的 download_url 会带内网地址
+cd /www/wwwroot/jubentong
+grep -q '^PUBLIC_BASE_URL=' .env \
+  && sed -i 's|^PUBLIC_BASE_URL=.*|PUBLIC_BASE_URL=https://api.example.com|' .env \
+  || echo 'PUBLIC_BASE_URL=https://api.example.com' >> .env
+grep -q '^HOST=' .env \
+  && sed -i 's|^HOST=.*|HOST=127.0.0.1|' .env \
+  || echo 'HOST=127.0.0.1' >> .env
+
+# 3. 重启生效
+systemctl restart douyin-parser
+curl https://api.example.com/healthz
+```
+
+两个环境变量的作用：
+
+| 变量 | 作用 |
+| --- | --- |
+| `PUBLIC_BASE_URL` | 生成 `download_url` 时用它作前缀，不配则从 `X-Forwarded-*` 请求头推断 |
+| `HOST=127.0.0.1` | 只监听本机，公网无法绕过 Nginx 直连 `5173`。配了之后别忘了关掉防火墙里那条 `5173` 的放行规则 |
+
+反代配置里有两处是为本服务专门调的，别删：
+
+- `proxy_read_timeout 120s`：解析要开无头浏览器，慢时接近 45 秒，给不够会 504
+- `proxy_buffering off`：`/dl` 返回视频且支持 Range 拖动，开缓冲会导致大文件先落盘、拖动失效
+
 ## 自动化部署（GitHub Actions）
 
 推送代码到 GitHub 后自动同步到生产服务器。**前提：服务器有公网 IP，
@@ -392,6 +429,12 @@ server/
   sign.js       HMAC 签名
   errors.js     统一错误码
 public/         接口文档与在线调试页
+deploy/
+  install-centos.sh          一键部署（RHEL 系）
+  update.sh                  生产增量更新（自动部署调用它）
+  setup-nginx.sh             绑定对外域名（生成 Nginx 反代配置）
+  nginx-douyin-parser.conf   反代配置模板
+  douyin-parser.service      systemd 单元模板
 research/       开发用探测脚本
 ```
 

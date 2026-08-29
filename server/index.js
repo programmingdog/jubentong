@@ -233,10 +233,12 @@ app.use((err, req, res, next) => {
 /* 启动                                                                */
 /* ------------------------------------------------------------------ */
 
-const server = app.listen(config.port, () => {
+const server = app.listen(config.port, config.host, () => {
   // eslint-disable-next-line no-console
   console.log('──────────────────────────────────────────────');
   console.log(' 抖音分享链接解析服务已启动');
+  console.log(` 监听     : ${config.host}:${config.port}`);
+  console.log(` 基址     : ${config.publicBaseUrl || '(未配置，从请求头推断)'}`);
   console.log(` 地址     : http://localhost:${config.port}`);
   console.log(` 文档     : http://localhost:${config.port}/`);
   console.log(` 鉴权     : ${config.requireAuth ? `开启（${config.apiKeys.size} 个 Key）` : '关闭'}`);
