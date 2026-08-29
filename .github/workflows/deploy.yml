@@ -48,7 +48,9 @@ jobs:
         run: |
           set -e
           # 必需的 Secret 检查。未配置时给出明确指引，而不是报一堆莫名错误
-          for pair in "SSH_KEY:SSH_PRIVATE_KEY" "SERVER_HOST:SERVER_HOST" "SERVER_USER:SERVER_USER"; do
+          # APP_DIR 也必须校验：漏配时脚本会静默回退到默认目录 /opt/douyin-parser，
+          # 在错误的目录里执行 git pull，报错信息很难定位
+          for pair in "SSH_KEY:SSH_PRIVATE_KEY" "SERVER_HOST:SERVER_HOST" "SERVER_USER:SERVER_USER" "APP_DIR:APP_DIR"; do
             var="${pair%%:*}"
             name="${pair##*:}"
             eval "val=\${$var:-}"
@@ -68,7 +70,7 @@ jobs:
           # 把服务器主机指纹加入 known_hosts，避免首次连接交互提示
           ssh-keyscan -p "$PORT_ARG" -H "$SERVER_HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
-          DIR="${APP_DIR:-/opt/douyin-parser}"
+          DIR="$APP_DIR"
 
           ssh -i ~/.ssh/deploy_key \
               -p "$PORT_ARG" \
